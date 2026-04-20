@@ -1,0 +1,768 @@
+{
+  "name": "instantly-salesforce-aimfox",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instantly-webhook",
+        "options": {}
+      },
+      "id": "c0f1bd2d-6f9c-4b9b-853d-681d7d264b63",
+      "name": "Instantly Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        528
+      ],
+      "webhookId": "<REDACTED_WEBHOOK_ID>"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aimfox-webhook",
+        "options": {}
+      },
+      "id": "be7ed943-8f98-43c0-b036-0e1d12a31722",
+      "name": "Aimfox LinkedIn Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -2320,
+        720
+      ],
+      "webhookId": "<REDACTED_WEBHOOK_ID>"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lead_email",
+              "value": "={{ $json.lead_email || $json.email }}"
+            },
+            {
+              "name": "event_type",
+              "value": "={{ $json.event_type || $json.action_type }}"
+            },
+            {
+              "name": "campaign_name",
+              "value": "={{ $json.campaign_name || 'Campaign' }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ $json.timestamp || new Date().toISOString() }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $json.first_name || $json.firstName || '' }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $json.last_name || $json.lastName || '' }}"
+            },
+            {
+              "name": "company",
+              "value": "={{ $json.lead_company || $json.company || 'Unknown Company' }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.email_text || $json.reply_text || $json.message_content || '' }}"
+            },
+            {
+              "name": "linkedin_url",
+              "value": "={{ $json.linkedin_url || '' }}"
+            },
+            {
+              "name": "source_type",
+              "value": "={{ $json.linkedin_url ? 'LinkedIn' : 'Email' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6ccfbe12-9839-4065-9a39-f7cd220786ed",
+      "name": "Normalize All Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -2096,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.body.lead_email && $json.body.event_type }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "33e4ca49-ee2c-4740-ba8f-8b911beaf395",
+      "name": "Validate Required Fields",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1872,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "search",
+        "query": "SELECT Id, AccountId, FirstName, LastName, HasOptedOutOfEmail FROM Contact WHERE Email = '{{ $json.lead_email }}' LIMIT 1"
+      },
+      "id": "4b6f6cdb-eefa-4d89-a46f-0ca9208d4b68",
+      "name": "Find Contact by Email",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -1648,
+        432
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "search",
+        "query": "SELECT Id, FirstName, LastName, HasOptedOutOfEmail FROM Lead WHERE Email = '{{ $json.lead_email }}' LIMIT 1"
+      },
+      "id": "ac990681-44c1-467a-bf78-e04cc25babbc",
+      "name": "Find Lead by Email",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -1648,
+        624
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $node['Find Contact by Email'].json.Id || $node['Find Lead by Email'].json.Id }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "7dd0ea92-cbbd-4faf-8fb8-8ebafb5669dc",
+      "name": "Check Record Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "company": "={{ $json.company }}",
+        "lastname": "={{ $json.lastName }}",
+        "additionalFields": {
+          "email": "={{ $json.lead_email }}",
+          "leadSource": "{{ $json.source_type }} Campaign",
+          "status": "Open - Not Contacted"
+        }
+      },
+      "id": "0e41e99e-aeed-4e62-a191-be61ad195dda",
+      "name": "Create New Lead",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        880
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event_type }}",
+              "value2": "email_bounced"
+            }
+          ]
+        }
+      },
+      "id": "957cca31-f18f-46ca-8cad-20cc52631890",
+      "name": "Check If Email Bounced",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($node['Find Contact by Email'].json.Id) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "b9cf3143-4c7d-4fad-8154-64c5bae41f8e",
+      "name": "Contact Exists for Bounce?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "update",
+        "contactId": "={{ $node['Find Contact by Email'].json.Id }}",
+        "updateFields": {
+          "description": "Email bounced - {{ $json.campaign_name }}"
+        }
+      },
+      "id": "1ee44750-1087-4ad0-8439-10516050f4bc",
+      "name": "Update Contact - Bounce",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        -80
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($node['Find Lead by Email'].json.Id) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "1b152262-2973-4474-b9fc-2438052088a7",
+      "name": "Lead Exists for Bounce?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "leadId": "={{ $node['Find Lead by Email'].json.Id }}",
+        "updateFields": {
+          "description": "Email bounced - {{ $json.campaign_name }}"
+        }
+      },
+      "id": "2ff2614d-7f35-47c8-a86a-88780e6a9664",
+      "name": "Update Lead - Bounce",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        112
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event_type }}",
+              "value2": "lead_unsubscribed"
+            }
+          ]
+        }
+      },
+      "id": "983fe9a2-fb2c-4ac7-bfaa-57b50e77cf69",
+      "name": "Check If Unsubscribed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($node['Find Contact by Email'].json.Id) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "6e134be6-34d8-47f1-afc2-6a85e5bf3d57",
+      "name": "Contact Exists for Unsubscribe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "update",
+        "contactId": "={{ $node['Find Contact by Email'].json.Id }}",
+        "updateFields": {
+          "description": "Unsubscribed from {{ $json.source_type }} campaign"
+        }
+      },
+      "id": "063a2bee-f3bd-44ed-ad97-048a7abcdf88",
+      "name": "Update Contact - Unsubscribe",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        400
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ Boolean($node['Find Lead by Email'].json.Id) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "26f104ab-b619-4674-8215-773a9ffb5266",
+      "name": "Lead Exists for Unsubscribe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -976,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "leadId": "={{ $node['Find Lead by Email'].json.Id }}",
+        "updateFields": {
+          "description": "Unsubscribed from {{ $json.source_type }} campaign",
+          "hasOptedOutOfEmail": true
+        }
+      },
+      "id": "5e664b88-4ad9-4231-b131-43bb6bd1cc89",
+      "name": "Update Lead - Unsubscribe",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -752,
+        688
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "task",
+        "status": "={{ $json.event_type === 'email_sent' ? 'Completed' : $json.event_type === 'reply_received' ? 'Completed' : $json.event_type === 'email_opened' ? 'In Progress' : $json.event_type === 'email_bounced' ? 'Deferred' : $json.event_type === 'lead_unsubscribed' ? 'Completed' : 'Completed' }}",
+        "additionalFields": {
+          "activityDate": "={{ new Date($json.timestamp).toISOString().split('T')[0] }}",
+          "description": "Source: {{ $json.source_type }}\\nEvent: {{ $json.event_type }}\\nCampaign: {{ $json.campaign_name }}\\nEmail: {{ $json.lead_email }}\\n{{ $json.linkedin_url ? 'LinkedIn: ' + $json.linkedin_url : '' }}\\nTimestamp: {{ $json.timestamp }}\\n\\n{{ $json.content }}",
+          "priority": "{{ $json.event_type === 'reply_received' ? 'High' : $json.event_type === 'email_opened' ? 'Normal' : 'Low' }}",
+          "type": "{{ $json.source_type === 'LinkedIn' ? 'LinkedIn' : 'Email' }}",
+          "whatId": "={{ $node['Find Contact by Email'].json.AccountId || $node['Find Contact by Email'].json.Id || $node['Find Lead by Email'].json.Id || $node['Create New Lead'].json.id }}",
+          "whoId": "={{ $node['Find Contact by Email'].json.Id || $node['Find Lead by Email'].json.Id || $node['Create New Lead'].json.id }}"
+        }
+      },
+      "id": "f57569c8-8cdc-498d-9687-d0ac249c22e1",
+      "name": "Log Activity (All Timelines)",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        304
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4911a096-ef12-49e4-9194-ecc46d8c7091",
+      "name": "Success Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "task",
+        "status": "Not Started",
+        "additionalFields": {
+          "activityDate": "={{ new Date().toISOString().split('T')[0] }}",
+          "description": "Error processing webhook data\\n\\nError: Invalid or missing required fields (email or event_type)\\nReceived Payload: {{ JSON.stringify($json) }}\\nTimestamp: {{ new Date().toISOString() }}",
+          "priority": "High",
+          "type": "Task"
+        }
+      },
+      "id": "37a3d6d7-9cdf-48cb-8f7c-065c7943fe8c",
+      "name": "Log Processing Error",
+      "type": "n8n-nodes-base.salesforce",
+      "typeVersion": 1,
+      "position": [
+        -1648,
+        816
+      ],
+      "credentials": {
+        "salesforceOAuth2Api": {
+          "id": "<REDACTED_CREDENTIAL_ID>", "name": "<REDACTED_CREDENTIAL_NAME>"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "32bbd7f2-b8df-4551-80c2-233b6ccd333e",
+      "name": "Error Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -1424,
+        816
+      ]
+    }
+  ],
+  "connections": {
+    "Instantly Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aimfox LinkedIn Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize All Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Required Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Required Fields": {
+      "main": [
+        [
+          {
+            "node": "Find Contact by Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Lead by Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Processing Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Contact by Email": {
+      "main": [
+        [
+          {
+            "node": "Check Record Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Lead by Email": {
+      "main": [
+        [
+          {
+            "node": "Check Record Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Record Exists": {
+      "main": [
+        [
+          {
+            "node": "Check If Email Bounced",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check If Unsubscribed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Lead": {
+      "main": [
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Email Bounced": {
+      "main": [
+        [
+          {
+            "node": "Contact Exists for Bounce?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lead Exists for Bounce?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Exists for Bounce?": {
+      "main": [
+        [
+          {
+            "node": "Update Contact - Bounce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Exists for Bounce?": {
+      "main": [
+        [
+          {
+            "node": "Update Lead - Bounce",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Contact - Bounce": {
+      "main": [
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead - Bounce": {
+      "main": [
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Unsubscribed": {
+      "main": [
+        [
+          {
+            "node": "Contact Exists for Unsubscribe?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lead Exists for Unsubscribe?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Exists for Unsubscribe?": {
+      "main": [
+        [
+          {
+            "node": "Update Contact - Unsubscribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Exists for Unsubscribe?": {
+      "main": [
+        [
+          {
+            "node": "Update Lead - Unsubscribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Contact - Unsubscribe": {
+      "main": [
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead - Unsubscribe": {
+      "main": [
+        [
+          {
+            "node": "Log Activity (All Timelines)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Activity (All Timelines)": {
+      "main": [
+        [
+          {
+            "node": "Success Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Processing Error": {
+      "main": [
+        [
+          {
+            "node": "Error Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 0,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
